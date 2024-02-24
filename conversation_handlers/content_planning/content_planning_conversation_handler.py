@@ -1,29 +1,35 @@
-from telegram.ext import ConversationHandler, CommandHandler, filters, MessageHandler
+from telegram.ext import CommandHandler, ConversationHandler
+from agents.custom_conversational_ai_agent import CustomConversationalAIAgent
+from models.conversation_config import ConversationConfig
+from models.agent_profile import AgentProfile
+from models.state import State
+from models.output_requirement import OutputRequirement
 
-CONTENT_PLANNING = 1
-END = ConversationHandler.END
 
-async def handle_content_planning(update, context):
-    """
-    Handle the content planning process by starting a conversation with the user.
-    """
-    await update.message.reply_text("📝 Let's start the content planning process. Please enter your time period and topics.")
-    return CONTENT_PLANNING
-
-def cancel_content_planning(update, context):
-    """
-    Cancel the content planning process and end the conversation.
-    """
-    update.message.reply_text("‼️ Content planning cancelled. You can start again by typing `/content_planning`.")
-    return END
+def create_content_planning_config() -> ConversationConfig:
+    # Define the configuration for content planning
+    return ConversationConfig(
+        name="Content Planning",
+        purpose="Plan content for a specified time period and topics",
+        output=[OutputRequirement()],  # Define output requirements
+        states=[
+            State(name="TimePeriod", description="Enter the time period for content ()"),
+            State(name="Topics", description="Specify topics for content ()")
+            # Add other states as needed
+        ],
+        agent_profile=AgentProfile(),  # Define the agent profile
+        contextual_memory=["time_period", "topics"]
+    )
 
 
 def add_content_planning_conversation_handler() -> ConversationHandler:
-    return ConversationHandler(
-        entry_points=[CommandHandler("content_planning", handle_content_planning)],
-        states={
-            CONTENT_PLANNING: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_content_planning)],
-            END: [],
-        },
-        fallbacks=[CommandHandler("cancel", cancel_content_planning)],
-    )
+    # Initialize CustomConversationalAIAgent with the conversation config
+    conversation_config = create_content_planning_config()
+    custom_agent = CustomConversationalAIAgent(conversation_config)
+
+    # Use the generated conversation handler from the custom agent
+    conversation_handler = custom_agent.generate_conversation_handler()
+
+    # Additional setup or customization of the handler can be done here if necessary
+
+    return conversation_handler
