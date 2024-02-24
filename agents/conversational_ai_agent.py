@@ -8,11 +8,16 @@ from typing import Callable, Tuple
 class ConversationalAIAgent(ABC):
     def __init__(self, conversation_config: ConversationConfig):
         self.conversation_config = conversation_config
-        self.current_state = None
+        self.current_state_index = 0
         self.contextual_memory = {}
+        self.model = self.initialize_model()
 
     @abstractmethod
-    def generate_conversation_handler(self, entry_function: Callable) -> ConversationHandler:
+    def initialize_model(self):
+        pass
+
+    @abstractmethod
+    def generate_conversation_handler(self) -> ConversationHandler:
         pass
 
     @abstractmethod
@@ -20,7 +25,7 @@ class ConversationalAIAgent(ABC):
         pass
 
     @abstractmethod
-    async def present_stage(self, update: Update, stage: str, context: CallbackContext):
+    async def present_stage(self, update: Update, context: CallbackContext):
         pass
 
     @abstractmethod
