@@ -3,7 +3,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from agents.conversational_ai_agent import ConversationalAIAgent
 from models.conversation_config import ConversationConfig
 from langchain.chat_models import ChatOpenAI
-from typing import Tuple
+
 
 class CustomConversationalAIAgent(ConversationalAIAgent):
     def __init__(self, conversation_config: ConversationConfig):
