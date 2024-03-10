@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+from datetime import date
 
 # from langchain.llms import Ollama #un comment for using Ollama
 from langchain_core.runnables import (
@@ -60,13 +61,21 @@ generation_prompt = ChatPromptTemplate.from_messages(
         (
             "human",
             """
-Please  base your response in the information present in the sources. TASK: Write an engaging twitter content based on the following query. The tweet should be 255 characters lengh max :
-     
+Step 1: Look up astrological information for the date {post_date}. This should include details about planetary positions, sign ascendants, and solar activity. Please base your response on scientifically-backed information.
+
+Step 2: Write an engaging Twitter post based on the following query and the astrological insights obtained in Step 1. The tweet should be a maximum of 255 characters:
+
 Query: {query}
 ---
+Astrological Insights:
+- Planetary Positions
+- Sign Ascendants
+- Solar Activity
 <context>
 {context}
 </context>
+
+OUTPUT: Only return the twitter post content as text
 """,
         ),
     ]
@@ -75,10 +84,14 @@ Query: {query}
 # llm = Ollama(model="llama2") #un comment to use Ollama instead of ChatOpenAI
 llm = ChatOpenAI()
 
+
+today = date.today()
+
 chain = (
     RunnableParallel(
         {
             "query": RunnablePassthrough(),
+            "post_date": RunnablePassthrough(),
             "context": retrieval_chain,
         }
     )
