@@ -8,11 +8,13 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.10"
 python-telegram-bot = {extras = ["job-queue"], version = "^20.7"}
-langchain = "^0.0.346"
 python-dotenv = "^1.0.0"
 uvicorn = "^0.27.1"
 fastapi = "^0.110.0"
-langserve = "^0.0.46"
+langchain = "^0.1.11"
+langchain-openai = "^0.0.8"
+langserve = "^0.0.47"
+sse-starlette = "^2.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.3"
