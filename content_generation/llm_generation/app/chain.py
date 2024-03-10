@@ -60,7 +60,7 @@ generation_prompt = ChatPromptTemplate.from_messages(
         (
             "human",
             """
-Please answer the following query based on the provided context. Please cite your sources at the end of your response.:
+Please  base your response in the information present in the sources. TASK: Write an engaging twitter content based on the following query. The tweet should be 255 characters lengh max :
      
 Query: {query}
 ---
