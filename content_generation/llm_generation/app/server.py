@@ -1,10 +1,10 @@
 from langserve import add_routes
 from fastapi import FastAPI
-from chain import endpoint_chain
+from chain import chain
 
 app = FastAPI()
 
-add_routes(app, endpoint_chain, path="/generate_post_content")
+add_routes(app, chain, path="/generate_post_content")
 
 if __name__ == "__main__":
     import uvicorn

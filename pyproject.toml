@@ -15,6 +15,7 @@ langchain = "^0.1.11"
 langchain-openai = "^0.0.8"
 langserve = "^0.0.47"
 sse-starlette = "^2.0.0"
+langchain-exa = "^0.0.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.3"

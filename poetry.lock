@@ -431,6 +431,20 @@ files = [
 ]
 
 [[package]]
+name = "exa-py"
+version = "1.0.8"
+description = "Python SDK for Exa API."
+optional = false
+python-versions = "*"
+files = [
+    {file = "exa_py-1.0.8-py3-none-any.whl", hash = "sha256:1a1543f312c75eb524999495dd53a094a8aab762e7e2317d1f20a1e262892d77"},
+    {file = "exa_py-1.0.8.tar.gz", hash = "sha256:cd5e0cd9463c8e6996a25cb1af25c048b3f0386ac737636f42ab28c965489fd1"},
+]
+
+[package.dependencies]
+requests = "*"
+
+[[package]]
 name = "exceptiongroup"
 version = "1.2.0"
 description = "Backport of PEP 654 (exception groups)"
@@ -857,6 +871,21 @@ tenacity = ">=8.1.0,<9.0.0"
 
 [package.extras]
 extended-testing = ["jinja2 (>=3,<4)"]
+
+[[package]]
+name = "langchain-exa"
+version = "0.0.1"
+description = "An integration package connecting Exa and LangChain"
+optional = false
+python-versions = ">=3.8.1,<4.0"
+files = [
+    {file = "langchain_exa-0.0.1-py3-none-any.whl", hash = "sha256:a932b10d4037d314686df5a4d995ebeb87c14adec38d3ea5ad35aa60e8d24e3c"},
+    {file = "langchain_exa-0.0.1.tar.gz", hash = "sha256:56ab74f23b4126340fc91b44ce9f8f7db196f823ce7e95ee06aaa7d22bb65d8b"},
+]
+
+[package.dependencies]
+exa-py = ">=1.0.7,<2.0.0"
+langchain-core = ">=0.0.12"
 
 [[package]]
 name = "langchain-openai"
@@ -2109,4 +2138,4 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "0e67f1a2a050c38d34bd35cabd2073369756a1b305642df071ceaab39b8f453b"
+content-hash = "896de54b2a877bfbe4d47347c9aed9572838f3c721ff5a935343d342f7b71cb9"
