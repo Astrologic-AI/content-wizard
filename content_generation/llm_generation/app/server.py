@@ -1,34 +1,14 @@
-"""Example server file, placeholder for incoming code"""
-
-from fastapi import FastAPI
-from langchain.prompts import ChatPromptTemplate
-from langchain.chat_models import ChatOpenAI
 from langserve import add_routes
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI
+from chain import chain
 
+app = FastAPI()
 
-app = FastAPI(
-    title="LangChain Server",
-    version="1.0",
-    description="A simple api server using Langchain's Runnable interfaces",
-)
-
-add_routes(
-    app,
-    ChatOpenAI(),
-    path="/openai",
-)
-
-
-model = ChatOpenAI()
-prompt = ChatPromptTemplate.from_template("tell me a joke about {topic}")
-add_routes(
-    app,
-    prompt | model,
-    path="/joke",
-)
+add_routes(app, chain, path="/generate_post_content")
 
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="localhost", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+# poetry run python server.py
