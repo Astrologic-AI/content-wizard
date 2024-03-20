@@ -19,8 +19,14 @@ class NotionClient:
     async def get_content_generated_by_post_idea(self, post_idea_id: str):
         url = self.base_url + "/contentGenerated"
         content_generated = await self.client.get(url=url, params={"post_idea_id": post_idea_id})
+        return [ContentGenerated(**content) for content in content_generated.json() if content["post_idea_id"] == post_idea_id]
 
     async def add_content_generated(self, content_generated: ContentGenerated):
         url = self.base_url + "/contentGenerated"
         response = await self.client.post(url, json=content_generated.dict())
+        return response.json()
+
+    async def update_post_idea_status(self, post_idea_id: str, status: Status):
+        url = self.base_url + f"/postIdeas/{post_idea_id}"
+        response = await self.client.put(url, params={"status": status.value})
         return response.json()
