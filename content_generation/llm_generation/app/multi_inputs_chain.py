@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 from datetime import date
-
+from pathlib import Path
 # from langchain.llms import Ollama #un comment for using Ollama
 from langchain_core.runnables import (
     RunnableLambda,
@@ -13,8 +13,12 @@ from langchain_exa import ExaSearchRetriever
 from langchain_core.output_parsers import StrOutputParser
 from operator import itemgetter
 
+
+# Get the path to the root directory of your project
+env_path = Path(__file__).resolve().parents[3] / '.env'
 # Load environment variables from .env file
-load_dotenv()
+load_dotenv(dotenv_path=env_path)
+
 
 # Access environment variables
 openai_api_key = os.getenv("OPENAI_API_KEY")
