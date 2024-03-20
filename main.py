@@ -100,14 +100,11 @@ def main() -> None:
     """Run the bot."""
     # persistence = PicklePersistence(filepath="contentwizard_persistence")
     application = Application.builder().token(TOKEN).build()
-    application.job_queue.run_once(callback=post_content, when=timedelta(seconds=5))
-    # application.job_queue.run_once(callback=generate_missing_content, when=timedelta(seconds=5))
-    # application.job_queue.run_repeating(callback=generate_missing_content, interval=timedelta(seconds=600))
+    application.job_queue.run_repeating(callback=generate_missing_content, interval=timedelta(seconds=600))
+    application.job_queue.run_repeating(callback=post_content, when=timedelta(seconds=300))
 
     # Adding handlers
     application.add_handler(CommandHandler("start", start))
-    # application.add_handler(add_content_planning_conversation_handler())
-    # application.add_handler(add_content_summary_conversation_handler())
     application.add_handler(CommandHandler("help", help))
 
     application.run_polling(allowed_updates=Update.ALL_TYPES)
