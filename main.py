@@ -101,7 +101,7 @@ def main() -> None:
     # persistence = PicklePersistence(filepath="contentwizard_persistence")
     application = Application.builder().token(TOKEN).build()
     application.job_queue.run_repeating(callback=generate_missing_content, interval=timedelta(seconds=600))
-    application.job_queue.run_repeating(callback=post_content, when=timedelta(seconds=300))
+    application.job_queue.run_repeating(callback=post_content, interval=timedelta(seconds=300))
 
     # Adding handlers
     application.add_handler(CommandHandler("start", start))
