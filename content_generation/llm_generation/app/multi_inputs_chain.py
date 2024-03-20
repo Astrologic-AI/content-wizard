@@ -66,18 +66,9 @@ generation_prompt = ChatPromptTemplate.from_messages(
             """
 Step 1: Look up astrological information for the date {publish_date}. This should include details about planetary positions, sign ascendants, and solar activity. Please base your response on scientifically-backed information.
 
-Step 2: Write an engaging  post for "platform" based on the following "description" and "title"  and the astrological insights obtained in Step 1:
+Step 2: Write an engaging  post for {platform} based on the following "description" and "title"  and the astrological insights obtained in Step 1:
 
-CONDITION : Your output can not be longer than  "max_characters". 
-
-<max_characters>
-{max_characters}
-</max_characters>
-
-
-<Platform>
-{platform}
-</Platform>
+CONDITION : The length of the output has to be lower than {max_characters} characters.
 
 <title> : 
 {title}
@@ -95,14 +86,13 @@ Astrological Insights:
 {context}
 </context>
 
-OUTPUT: Only return the {platform} post content as text
+OUTPUT: Only return the {platform} post content as text, don't include any other information provided in the input.
 """,
         ),
     ]
 )
 
-# llm = Ollama(model="llama2") #un comment to use Ollama instead of ChatOpenAI
-llm = ChatOpenAI()
+llm = ChatOpenAI(max_tokens=100, temperature=0.3)
 
 
 today = date.today()
