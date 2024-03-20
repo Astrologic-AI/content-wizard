@@ -60,21 +60,21 @@ generation_prompt = ChatPromptTemplate.from_messages(
         (
             "human",
             """
-Step 1: Look up astrological information for the date {post_date}. This should include details about planetary positions, sign ascendants, and solar activity. Please base your response on scientifically-backed information.
+Step 1: Look up astrological information for the date {publish_date}. This should include details about planetary positions, sign ascendants, and solar activity. Please base your response on scientifically-backed information.
 
-Step 2: Write an engaging  post for "platform" based on the following "post_idea_description" and "post_idea_title"  and the astrological insights obtained in Step 1:
+Step 2: Write an engaging  post for "platform" based on the following "description" and "title"  and the astrological insights obtained in Step 1:
 
 <Platform>
 {platform}
 </Platform>
 
-<post_idea_title> : 
-{post_idea_title}
-</post_idea_title>
+<title> : 
+{title}
+</title>
 
-<post_idea_description> : 
-{post_idea_description}
-</post_idea_description>
+<description> : 
+{description}
+</description>
 ---
 Astrological Insights:
 - Planetary Positions
@@ -98,11 +98,11 @@ today = date.today()
 
 multi_input_chain = (
     {
-        "context": itemgetter("post_idea_description") | retrieval_chain,
-        "post_idea_description": itemgetter("post_idea_description"),
+        "context": itemgetter("description") | retrieval_chain,
+        "description": itemgetter("description"),
         "platform": itemgetter("platform"),
-        "post_date": itemgetter("post_date"),
-        "post_idea_title": itemgetter("post_idea_title"),
+        "publish_date": itemgetter("publish_date"),
+        "title": itemgetter("title"),
     }
     | RunnablePassthrough.assign(context=itemgetter("context"))
     | {"response": generation_prompt | llm, "context": itemgetter("context")}
