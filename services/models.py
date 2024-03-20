@@ -40,5 +40,5 @@ class ContentGenerated(BaseModel):
     name: str
     post_idea_id: str
     text: str
-    media: Optional[str]  # TODO: research URL validation pydantic
+    media: Optional[str] = None
     selected: bool
