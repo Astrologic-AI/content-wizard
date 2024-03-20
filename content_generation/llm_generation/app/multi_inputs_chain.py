@@ -64,6 +64,13 @@ Step 1: Look up astrological information for the date {publish_date}. This shoul
 
 Step 2: Write an engaging  post for "platform" based on the following "description" and "title"  and the astrological insights obtained in Step 1:
 
+CONDITION : Your output can not be longer than  "max_characters". 
+
+<max_characters>
+{max_characters}
+</max_characters>
+
+
 <Platform>
 {platform}
 </Platform>
@@ -103,9 +110,10 @@ multi_input_chain = (
         "platform": itemgetter("platform"),
         "publish_date": itemgetter("publish_date"),
         "title": itemgetter("title"),
+        "max_characters": itemgetter("max_characters"),
     }
     | RunnablePassthrough.assign(context=itemgetter("context"))
     | {"response": generation_prompt | llm, "context": itemgetter("context")}
 )
 
-#todo: return a dictionary with the response .
+# todo: return a dictionary with the response .
