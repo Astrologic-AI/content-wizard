@@ -4,11 +4,12 @@ from multi_inputs_chain import multi_input_chain
 import random
 
 # MULTI INPUT EXAMPLE
-description = "Generate a string about an astrology Twitter post idea"
-publish_date = "2024-03-09"
-title = "Astrological Wellness"
+description = "Alignment of stars and planets influences your life's journey"
+publish_date = "2024-04-11"
+title = "Unlock Your Cosmic Potential"
 platform = "Twitter"
-max_characters = random.randint(150, 300)
+max_characters = random.randint(300, 500)
+instruction = "Navigate scientific astrology websites to find articles on planetary positions. Gather accurate data on major celestial bodies."
 
 config_dict = {
     "description": description,
@@ -18,8 +19,14 @@ config_dict = {
     "max_characters": max_characters,
     "extra_field": "I am extrafield",
 }
-a = multi_input_chain.invoke(config_dict)
-print(a["response"].content)
+
+enhanced_config_dict = {
+    **config_dict,
+    "info_to_search": f"{instruction} {description} {config_dict['publish_date']}"
+}
+
+a = multi_input_chain.batch([enhanced_config_dict, enhanced_config_dict])
+[print(a[i]["response"].content) for i in range(0, len(a))]
 # %%
 # import requests
 # Generate strings for the request
