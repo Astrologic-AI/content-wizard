@@ -6,7 +6,8 @@ from zoneinfo import ZoneInfo
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, PicklePersistence
 
-from config import TOKEN, NOTION_SERVICE_BASE_URL, TWITTER_SERVICE_BASE_URL, MAX_CONTENT_GENERATION_BY_POST_IDEA
+from config import TOKEN, NOTION_SERVICE_BASE_URL, TWITTER_SERVICE_BASE_URL, MAX_CONTENT_GENERATION_BY_POST_IDEA, \
+    GROUP_CHAT_ID
 from services.models import Status, ContentGenerated
 from services.notion_client import NotionClient
 from services.twitter_client import TwitterClient
@@ -23,19 +24,22 @@ logging.basicConfig(
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Start the conversation and display the main menu."""
-    reply_text = """
-🚀 **Welcome to ContentWizard\!** Your AI assistant for social media content creation and scheduling\.
-
-🎛️ Quick Commands:
-
-🔸 `/content_planning`: Interact with an AI agent to create post ideas\.
-🔸 `/content_summary`: Summarize available content and identify opportunities\.
-
-🔍 Need help? Type `/help` for assistance\.
-
-Let's make your social media management magical with ContentWizard\!
-"""
-    await update.message.reply_text(reply_text, parse_mode="MarkdownV2")
+#     reply_text = """
+# 🚀 **Welcome to ContentWizard\!** Your AI assistant for social media content creation and scheduling\.
+#
+# 🎛️ Quick Commands:
+#
+# 🔸 `/content_planning`: Interact with an AI agent to create post ideas\.
+# 🔸 `/content_summary`: Summarize available content and identify opportunities\.
+#
+# 🔍 Need help? Type `/help` for assistance\.
+#
+# Let's make your social media management magical with ContentWizard\!
+# """
+    chat_id = update.effective_chat.id  # This gets the chat ID
+    reply_text = f"Chat ID of this group is: {chat_id}"
+    await update.message.reply_text(reply_text)
+    # await update.message.reply_text(reply_text, parse_mode="MarkdownV2")
 
 async def help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     help_text = """
@@ -58,48 +62,61 @@ Make your social media management effortless with ContentWizard\!
 
 
 async def post_content(ctx):
-    post_ideas = await notion_client.get_all_post_ideas_by_status(status=Status.READY_TO_PUBLISH)
-    tz = ZoneInfo('America/Sao_Paulo')
-    for post_idea in post_ideas:
-        now = datetime.now(tz)
-        publish_date = post_idea.publish_date.astimezone(tz)
-        if publish_date <= now and publish_date.date() == now.date():
-            content_generated = await notion_client.get_content_generated_by_post_idea(post_idea.notion_id)
-            only_one_selected = len([content for content in content_generated if content.selected]) == 1
-            if only_one_selected:
-                selected_content = [content for content in content_generated if content.selected][0]
-                await twitter_client.post_tweet(selected_content.text)
-                await notion_client.update_post_idea_status(post_idea.notion_id, Status.PUBLISHED)
-            else:
-                logging.error("Only one content should be selected for publishing")
+    try:
+        post_ideas = await notion_client.get_all_post_ideas_by_status(status=Status.READY_TO_PUBLISH)
+        tz = ZoneInfo('America/Sao_Paulo')
+        for post_idea in post_ideas:
+            now = datetime.now(tz)
+            publish_date = post_idea.publish_date.astimezone(tz)
+            if publish_date <= now and publish_date.date() == now.date():
+                content_generated = await notion_client.get_content_generated_by_post_idea(post_idea.notion_id)
+                only_one_selected = len([content for content in content_generated if content.selected]) == 1
+                if only_one_selected:
+                    selected_content = [content for content in content_generated if content.selected][0]
+                    await twitter_client.post_tweet(selected_content.text)
+                    await notion_client.update_post_idea_status(post_idea.notion_id, Status.PUBLISHED)
+                    await ctx.bot.send_message(chat_id=GROUP_CHAT_ID, text=f"🚀 Content published: {selected_content.text}")
+                else:
+                    logging.error("Only one content should be selected for publishing")
+                    await ctx.bot.send_message(chat_id=GROUP_CHAT_ID, text="Error: More than one content selected for publishing.")
+    except Exception as e:
+        logging.error(e)
+        await ctx.bot.send_message(chat_id=GROUP_CHAT_ID, text=f"Error posting content: {str(e)}")
 
 
 async def generate_missing_content(ctx):
-    post_ideas = await notion_client.get_all_post_ideas_by_status(status=Status.IDEA_GENERATED)
-    for post_idea in post_ideas:
-        content_generated = await notion_client.get_content_generated_by_post_idea(post_idea.notion_id)
-        diff_to_target_content = MAX_CONTENT_GENERATION_BY_POST_IDEA - len(content_generated)
-        if diff_to_target_content > 0:
-            for i in range(diff_to_target_content):
-                try:
-                    post_idea_dict = post_idea.dict()
-                    post_idea_dict["max_characters"] = random.randint(100, 255)
-                    content = multi_input_chain.invoke(post_idea_dict)["response"].content
-                    content_generated = ContentGenerated(
-                        name=post_idea.title,
-                        post_idea_id=post_idea.notion_id,
-                        text=content,
-                        selected=False,
-                    )
-                    await notion_client.add_content_generated(content_generated)
-                except Exception as e:
-                    logging.error(e)
+    try:
+        post_ideas = await notion_client.get_all_post_ideas_by_status(status=Status.IDEA_GENERATED)
+        for post_idea in post_ideas:
+            content_generated = await notion_client.get_content_generated_by_post_idea(post_idea.notion_id)
+            diff_to_target_content = MAX_CONTENT_GENERATION_BY_POST_IDEA - len(content_generated)
+            if diff_to_target_content > 0:
+                for i in range(diff_to_target_content):
+                    try:
+                        post_idea_dict = post_idea.dict()
+                        post_idea_dict["max_characters"] = random.randint(100, 255)
+                        content = multi_input_chain.invoke(post_idea_dict)["response"].content
+                        content_generated = ContentGenerated(
+                            name=post_idea.title,
+                            post_idea_id=post_idea.notion_id,
+                            text=content,
+                            selected=False,
+                        )
+                        await notion_client.add_content_generated(content_generated)
+                        await ctx.bot.send_message(chat_id=GROUP_CHAT_ID, text=f"New content generated for: {post_idea.title}")
+                    except Exception as e:
+                        logging.error(e)
+                        await ctx.bot.send_message(chat_id=GROUP_CHAT_ID, text=f"Error generating content for: {post_idea.title} - {str(e)}")
+    except Exception as e:
+        logging.error(e)
+        await ctx.bot.send_message(chat_id=GROUP_CHAT_ID, text=f"Error generating missing content: {str(e)}")
 
 
 def main() -> None:
     """Run the bot."""
     # persistence = PicklePersistence(filepath="contentwizard_persistence")
     application = Application.builder().token(TOKEN).build()
+    application.job_queue.run_once(callback=post_content, when=5)
     application.job_queue.run_repeating(callback=generate_missing_content, interval=timedelta(seconds=600))
     application.job_queue.run_repeating(callback=post_content, interval=timedelta(seconds=300))
 
