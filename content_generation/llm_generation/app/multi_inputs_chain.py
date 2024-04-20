@@ -13,12 +13,10 @@ from langchain_exa import ExaSearchRetriever
 from langchain_core.output_parsers import StrOutputParser
 from operator import itemgetter
 
-
 # Get the path to the root directory of your project
 env_path = Path(__file__).resolve().parents[3] / '.env'
 # Load environment variables from .env file
 load_dotenv(dotenv_path=env_path)
-
 
 # Access environment variables
 openai_api_key = os.getenv("OPENAI_API_KEY")
@@ -28,32 +26,40 @@ langchain_api_key = os.getenv("LANGCHAIN_API_KEY")
 langchain_project = os.getenv("LANGCHAIN_PROJECT")
 langchain_endpoint = os.getenv("LANGCHAIN_ENDPOINT")
 
+astro_domains_to_include = [
+    "https://cafeastrology.com",
+    "https://www.astrology.com",
+    "https://www.astro-seek.com",
+    "https://astrostyle.com",
+    "https://www.astrologyzone.com"
+]
 
-retriever = ExaSearchRetriever(k=3, highlights=True)
+retriever = ExaSearchRetriever(k=2,
+                               domains_to_include=astro_domains_to_include,
+                               #exclude_domains=["https://twitter.com/", "https://whattotweet.com/"],
+                               use_autoprompt=True)
+#  )
 
 document_prompt = PromptTemplate.from_template(
     """
 <source>
-    <url>{url}</url>
-    <highlights>{highlights}</highlights>
+    <page_content>{page_content}</page_content>
 </source>
 """
 )
 
 document_chain = (
-    RunnableLambda(
-        lambda document: {
-            "highlights": document.metadata["highlights"],
-            "url": document.metadata["url"],
-        }
-    )
-    | document_prompt
+        RunnableLambda(
+            lambda document: {
+                "page_content": document.page_content,
+            }
+        )
+        | document_prompt
 )
 
 retrieval_chain = (
-    retriever | document_chain.map() | (lambda docs: "\n".join([i.text for i in docs]))
+        retriever | document_chain.map() | (lambda docs: "\n".join([i.text for i in docs]))
 )
-
 
 generation_prompt = ChatPromptTemplate.from_messages(
     [
@@ -64,29 +70,18 @@ generation_prompt = ChatPromptTemplate.from_messages(
         (
             "human",
             """
-Step 1: Look up astrological information for the date {publish_date}. This should include details about planetary positions, sign ascendants, and solar activity. Please base your response on scientifically-backed information.
+            Sum up information from "content" to generate a text post to be published on {publish_date} in the platform : {platform}.
 
-Step 2: Write an engaging  post for {platform} based on the following "description" and "title"  and the astrological insights obtained in Step 1:
-
-CONDITION : The length of the output has to be lower than {max_characters} characters.
-
-<title> : 
-{title}
-</title>
-
-<description> : 
-{description}
-</description>
----
-Astrological Insights:
-- Planetary Positions
-- Sign Ascendants
-- Solar Activity
+CONDITION I : The content should sound human written and with basic english. Use basic words. Mimic a human writing.
+CONDITION II : ONLY USE INFORMATION FROM the given "context"
+CONDITION  III : The length of the output has to be lower than {max_characters} characters.
+ 
+ 
 <context>
 {context}
 </context>
 
-OUTPUT: Only return the {platform} post content as text, don't include any other information provided in the input.
+
 """,
         ),
     ]
@@ -94,20 +89,19 @@ OUTPUT: Only return the {platform} post content as text, don't include any other
 
 llm = ChatOpenAI(max_tokens=100, temperature=0.3)
 
-
 today = date.today()
 
 multi_input_chain = (
-    {
-        "context": itemgetter("description") | retrieval_chain,
-        "description": itemgetter("description"),
-        "platform": itemgetter("platform"),
-        "publish_date": itemgetter("publish_date"),
-        "title": itemgetter("title"),
-        "max_characters": itemgetter("max_characters"),
-    }
-    | RunnablePassthrough.assign(context=itemgetter("context"))
-    | {"response": generation_prompt | llm, "context": itemgetter("context")}
+        {
+            "context": itemgetter("info_to_search") | retrieval_chain,
+            "description": itemgetter("description"),
+            "platform": itemgetter("platform"),
+            "publish_date": itemgetter("publish_date"),
+            "title": itemgetter("title"),
+            "max_characters": itemgetter("max_characters"),
+        }
+        | RunnablePassthrough.assign(context=itemgetter("context"))
+        | {"response": generation_prompt | llm, "context": itemgetter("context")}
 )
 
 # todo: return a dictionary with the response .
