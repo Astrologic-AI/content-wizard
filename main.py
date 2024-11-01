@@ -1,131 +1,132 @@
-import logging
+import asyncio
+import os
 import random
-from datetime import timedelta, datetime
-from zoneinfo import ZoneInfo
+from datetime import datetime, timedelta
 
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes, PicklePersistence
-
-from config import TOKEN, NOTION_SERVICE_BASE_URL, TWITTER_SERVICE_BASE_URL, MAX_CONTENT_GENERATION_BY_POST_IDEA, \
-    GROUP_CHAT_ID
-from services.models import Status, ContentGenerated
-from services.notion_client import NotionClient
+from langchain.prompts import ChatPromptTemplate
+import pandas as pd
+from langchain_core.messages import HumanMessage
+from langchain_ollama.llms import OllamaLLM
+from langchain_core.tools import tool
+from geckoterminal_py import GeckoTerminalAsyncClient
+import operator
+from typing import Annotated
+from typing_extensions import TypedDict
+from langgraph.graph import START, END, StateGraph
 from services.twitter_client import TwitterClient
-from content_generation.llm_generation.app.multi_inputs_chain import multi_input_chain
+from dotenv import load_dotenv
+
+load_dotenv()
+client = GeckoTerminalAsyncClient()
+twitter_client = TwitterClient(base_url="http://localhost:3000")
+
+agents = {
+    "quantitative_analyst": {
+        "model": OllamaLLM(model="llama3.2", temperature=0.2),
+        "system_message": "You are a helpful assistant that generates a quantitative analysis of the current crypto market trends.",
+        "prompt_message": "The available market data is: {pools}, generate a list of 10 sentences each containing a single fact with less than 20 words. The insights should include information about top performers, interesting ratios between volume and liquidity, notable market cap changes, and any other statistically significant metrics or patterns. Always start with the coin name with a $ sign and then the fact.",
+    },
+    "twitter_writer": {
+        "model": OllamaLLM(model="llama3.2", temperature=0.7),
+        "system_message": "You are Eminem rapper plus quantitative analyst that writes tweets with rap style about pumping coins. Write controversial and contrarian tweets that rhyme, is forbidden to use hashtags and is required to include numerical insights.",
+        "prompt_message": "Write one single-sentence tweet with less than 100 characters about one coin, using only these market highlights: {facts} and is forbidden to talk about the same coin as in the previous tweets or use the same phrases: {previous_tweets}, h1 is last hour, h24 is last 24 hours. Always use $ before the coin name!"
+    }
+}
+
+def get_agent_prompt_and_model(agent_name: str):
+    agent = agents[agent_name]
+    return ChatPromptTemplate.from_messages([
+        ("system", agent["system_message"]),
+        ("human", agent["prompt_message"]),
+    ]), agent["model"]
 
 
-notion_client = NotionClient(NOTION_SERVICE_BASE_URL)
-twitter_client = TwitterClient(TWITTER_SERVICE_BASE_URL)
+class State(TypedDict):
+    pools: Annotated[list, operator.add]
+    previous_tweets: Annotated[list, operator.add]
+    facts: Annotated[list, operator.add]
 
-# Enable logging
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
-)
+async def update_data(state: State) -> State:
+    recent_tweets = await twitter_client.get_user_tweets("1274406877326172160")
+    tweets = recent_tweets.get("data", [])
+    tweets_text = [tweet.get("text", "") for tweet in tweets[-4:]]
+    pools = await client.get_trending_pools_by_network("solana")
+    pools["name"] = pools["name"].apply(lambda x: x.split("/")[0])
+    pools["volume_liquidity_ratio"] = pd.to_numeric(pools["volume_usd_h24"]) / pd.to_numeric(pools["reserve_in_usd"])
+    pools = pools[["name", 'price_change_percentage_h1', 'price_change_percentage_h24', 
+                  'transactions_h1_buys', 'transactions_h1_sells', 'volume_usd_h24', 'volume_liquidity_ratio']]
+    return {"pools": [pools.head(40)],
+            "previous_tweets": tweets_text}
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Start the conversation and display the main menu."""
-#     reply_text = """
-# 🚀 **Welcome to ContentWizard\!** Your AI assistant for social media content creation and scheduling\.
-#
-# 🎛️ Quick Commands:
-#
-# 🔸 `/content_planning`: Interact with an AI agent to create post ideas\.
-# 🔸 `/content_summary`: Summarize available content and identify opportunities\.
-#
-# 🔍 Need help? Type `/help` for assistance\.
-#
-# Let's make your social media management magical with ContentWizard\!
-# """
-    chat_id = update.effective_chat.id  # This gets the chat ID
-    reply_text = f"Chat ID of this group is: {chat_id}"
-    await update.message.reply_text(reply_text)
-    # await update.message.reply_text(reply_text, parse_mode="MarkdownV2")
+async def call_analyst(state: State, analyst_type: str, chunks: int = 2) -> State:
+    pools = state["pools"][-1]
+    step = len(pools) // chunks
+    pool_chunks = [pools[i * step:(i+1) * step] for i in range(chunks)]
+    
+    analyst_prompt, analyst_model = get_agent_prompt_and_model(analyst_type)
+    prompts = [analyst_prompt.format_messages(pools=chunk) for chunk in pool_chunks]
+    model_tasks = [analyst_model.ainvoke(prompt) for prompt in prompts]
+    facts = await asyncio.gather(*model_tasks)
+    return {"facts": [facts]}
 
-async def help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    help_text = """
-🚀 *Welcome to ContentWizard Help\!* 🚀
+async def call_quantitative_analyst(state: State) -> State:
+    return await call_analyst(state, "quantitative_analyst")
 
-ContentWizard is your AI assistant for managing social media content\. Here's how you can use its features:
+async def call_tweet_writer(state: State) -> State:
+    analyst_prompt, analyst_model = get_agent_prompt_and_model("twitter_writer")
+    prompt = analyst_prompt.format_messages(facts=state["facts"], previous_tweets=state["previous_tweets"])
+    tweet = await analyst_model.ainvoke(prompt)
+    await twitter_client.post_tweet(tweet.replace('"', ''))
 
-🔹 `/content_planning` \- Create post ideas with an AI agent\. Define your time period and topics, and receive a list of PostIdeas\.
-🔹 `/content_summary` \- Summarize your content from Notion, identify opportunities, and detect anomalies\.
+builder = StateGraph(State)
+builder.add_node("update_data", update_data)
+builder.add_node("call_quantitative_analyst", call_quantitative_analyst)
+builder.add_node("call_tweet_writer", call_tweet_writer)
 
-💡 *Tips*:
-   \- Use `/content_planning` regularly to keep your content fresh and engaging\.
-   \- Rely on `/content_summary` to stay informed about your content's performance and opportunities\.
+builder.add_edge(START, "update_data")
+builder.add_edge("update_data", "call_quantitative_analyst")
+builder.add_edge("call_quantitative_analyst", "call_tweet_writer")
+builder.add_edge("call_tweet_writer", END)
 
-🔍 Need more assistance or have feedback? Just reply with your question or feedback\!
+graph = builder.compile()
 
-Make your social media management effortless with ContentWizard\!
-"""
-    await update.message.reply_text(help_text, parse_mode="MarkdownV2")
+async def refresh_auth_task():
+    while True:
+        try:
+            await twitter_client.refresh_auth()
+            print(f"Auth refreshed at: {datetime.now()}")
+        except Exception as e:
+            print(f"Error refreshing auth: {e}")
+        await asyncio.sleep(15 * 60)  # Sleep for 15 minutes
 
+async def run_graph():
+    inputs = {"facts": []}
+    await graph.ainvoke(inputs)
 
-async def post_content(ctx):
+async def main():
+    # Create and start the refresh_auth task
+    refresh_task = asyncio.create_task(refresh_auth_task())
+
     try:
-        post_ideas = await notion_client.get_all_post_ideas_by_status(status=Status.READY_TO_PUBLISH)
-        tz = ZoneInfo('America/Sao_Paulo')
-        for post_idea in post_ideas:
-            now = datetime.now(tz)
-            publish_date = post_idea.publish_date.astimezone(tz)
-            if publish_date <= now and publish_date.date() == now.date():
-                content_generated = await notion_client.get_content_generated_by_post_idea(post_idea.notion_id)
-                only_one_selected = len([content for content in content_generated if content.selected]) == 1
-                if only_one_selected:
-                    selected_content = [content for content in content_generated if content.selected][0]
-                    await twitter_client.post_tweet(selected_content.text)
-                    await notion_client.update_post_idea_status(post_idea.notion_id, Status.PUBLISHED)
-                    await ctx.bot.send_message(chat_id=GROUP_CHAT_ID, text=f"🚀 Content published: {selected_content.text}")
-                else:
-                    logging.error("Only one content should be selected for publishing")
-                    await ctx.bot.send_message(chat_id=GROUP_CHAT_ID, text="Error: More than one content selected for publishing.")
+        while True:
+            await run_graph()
+            wait_time = random.randint(40 * 60, 150 * 60)  # Random time between 15 and 45 minutes in seconds
+            next_run = datetime.now() + timedelta(seconds=wait_time)
+            print(f"Next run scheduled at: {next_run}")
+            await asyncio.sleep(wait_time)
+    except asyncio.CancelledError:
+        # Cancel the refresh_auth task when the main task is cancelled
+        refresh_task.cancel()
+        await refresh_task
     except Exception as e:
-        logging.error(e)
-        await ctx.bot.send_message(chat_id=GROUP_CHAT_ID, text=f"Error posting content: {str(e)}")
-
-
-async def generate_missing_content(ctx):
-    try:
-        post_ideas = await notion_client.get_all_post_ideas_by_status(status=Status.IDEA_GENERATED)
-        for post_idea in post_ideas:
-            content_generated = await notion_client.get_content_generated_by_post_idea(post_idea.notion_id)
-            diff_to_target_content = MAX_CONTENT_GENERATION_BY_POST_IDEA - len(content_generated)
-            if diff_to_target_content > 0:
-                for i in range(diff_to_target_content):
-                    try:
-                        post_idea_dict = post_idea.dict()
-                        post_idea_dict["max_characters"] = random.randint(100, 255)
-                        content = multi_input_chain.invoke(post_idea_dict)["response"].content
-                        content_generated = ContentGenerated(
-                            name=post_idea.title,
-                            post_idea_id=post_idea.notion_id,
-                            text=content,
-                            selected=False,
-                        )
-                        await notion_client.add_content_generated(content_generated)
-                        await ctx.bot.send_message(chat_id=GROUP_CHAT_ID, text=f"New content generated for: {post_idea.title}")
-                    except Exception as e:
-                        logging.error(e)
-                        await ctx.bot.send_message(chat_id=GROUP_CHAT_ID, text=f"Error generating content for: {post_idea.title} - {str(e)}")
-    except Exception as e:
-        logging.error(e)
-        await ctx.bot.send_message(chat_id=GROUP_CHAT_ID, text=f"Error generating missing content: {str(e)}")
-
-
-def main() -> None:
-    """Run the bot."""
-    # persistence = PicklePersistence(filepath="contentwizard_persistence")
-    application = Application.builder().token(TOKEN).build()
-    application.job_queue.run_once(callback=post_content, when=5)
-    application.job_queue.run_repeating(callback=generate_missing_content, interval=timedelta(seconds=600))
-    application.job_queue.run_repeating(callback=post_content, interval=timedelta(seconds=300))
-
-    # Adding handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help))
-
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
-
+        print(f"An error occurred in the main loop: {e}")
+        refresh_task.cancel()
+        await refresh_task
+    finally:
+        # Ensure the refresh_auth task is properly cancelled and cleaned up
+        if not refresh_task.done():
+            refresh_task.cancel()
+            await refresh_task
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
